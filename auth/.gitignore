@@ -1,0 +1,4 @@
+/config/local.yaml
+.idea/
+/storage/*.db
+identifier.sqlite
