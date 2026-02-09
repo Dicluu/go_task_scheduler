@@ -39,8 +39,8 @@ func main() {
 
 	// TODO: maybe move logic to services
 	r.Post("/register", reg.New(log, storage))
-	r.Post("/login", login.New(log, storage, storage, cfg.Secret, cfg.TokenTTL, cfg.RefreshTokenTTL))
-	r.Post("/refresh", refresh.New(log, storage, storage, cfg.Secret, cfg.TokenTTL, cfg.RefreshTokenTTL))
+	r.Post("/login", login.New(log, login.NewUsecase(log, storage, storage, cfg.Secret, cfg.TokenTTL, cfg.RefreshTokenTTL)))
+	r.Post("/refresh", refresh.New(log, refresh.NewUsecase(log, storage, storage, cfg.TokenTTL, cfg.RefreshTokenTTL), cfg.Secret))
 
 	srv := &http.Server{
 		Addr:         cfg.HttpServer.Address,

@@ -121,24 +121,25 @@ func (s *Storage) App(ctx context.Context, appID int) (models.App, error) {
 	return app, nil
 }
 
-func (s *Storage) RefreshToken(ctx context.Context, token string) (models.RefreshToken, error) {
+func (s *Storage) RefreshToken(ctx context.Context, token string) (*models.RefreshToken, error) {
 	const op = "storage.sqlite.RefreshToken"
 
-	var rt models.RefreshToken
+	var rt *models.RefreshToken
 
 	err := s.db.QueryRowContext(ctx, "SELECT id, user_id, token, used FROM refresh_tokens WHERE token = ?", token).Scan(&rt.ID, &rt.UserID, &rt.Token, &rt.Used)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return models.RefreshToken{}, fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
+			return &models.RefreshToken{}, fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
 		}
 
-		return models.RefreshToken{}, fmt.Errorf("%s: %w", op, err)
+		return &models.RefreshToken{}, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return rt, nil
 }
 
-func (s *Storage) SaveRefreshToken(ctx context.Context, rt models.RefreshToken) error {
+// TODO: refactor, do not use domain model in storage layer
+func (s *Storage) SaveRefreshToken(ctx context.Context, rt *models.RefreshToken) error {
 	const op = "storage.sqlite.SaveRefreshToken"
 
 	_, err := s.db.ExecContext(ctx, "INSERT INTO refresh_tokens(user_id, token, used) VALUES(?,?,?)", rt.UserID, rt.Token, false)
@@ -148,6 +149,19 @@ func (s *Storage) SaveRefreshToken(ctx context.Context, rt models.RefreshToken) 
 			return fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenExists)
 		}
 
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+// TODO: refactor, do not use domain model in storage layer
+func (s *Storage) UseRefreshToken(ctx context.Context, rt *models.RefreshToken) error {
+	const op = "storage.sqlite.UseRefreshToken"
+
+	_, err := s.db.ExecContext(ctx, "UPDATE refresh_tokens SET used = ? WHERE id = ?", true, rt.ID)
+	if err != nil {
+		var sqliteErr sqlite3.Error
 		if errors.As(err, &sqliteErr) && errors.Is(sqliteErr.ExtendedCode, sqlite3.ErrNotFound) {
 			return fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
 		}

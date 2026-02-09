@@ -1,9 +1,8 @@
 package refresh
 
 import (
-	"auth/internal/domain/models"
-	"auth/internal/lib/jwt"
-	"auth/internal/lib/jwt/jwtgen"
+	"auth/internal/application/usecase"
+	"auth/internal/application/usecase/tokenrefreshuc"
 	"auth/internal/lib/logger/sl"
 	"auth/internal/storage"
 	resp "auth/pkg/api/resp"
@@ -18,6 +17,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type Usecase interface {
+	RefreshSession(ctx context.Context, secret string, refreshToken string) (string, string, error)
+}
+
 type Request struct {
 	RefreshToken string `json:"token" validate:"required"`
 }
@@ -28,22 +31,13 @@ type Response struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-type RefreshTokenStorage interface {
-	RefreshToken(ctx context.Context, token string) (models.RefreshToken, error)
-	SaveRefreshToken(ctx context.Context, rt models.RefreshToken) error
-}
-
-type UserStorage interface {
-	UserById(ctx context.Context, id int64) (*models.User, error)
-}
-
-func New(log *slog.Logger, rtStorage RefreshTokenStorage, uStorage UserStorage, secret string, tokenTTL, rtTTL time.Duration) http.HandlerFunc {
+func New(log *slog.Logger, usecase Usecase, secret string) http.HandlerFunc {
 	const op = "http-server.handlers.user.refresh.New"
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := log.With(slog.String("op", op), slog.String("req-id", middleware.GetReqID(r.Context())))
+		hlog := log.With(slog.String("op", op), slog.String("req-id", middleware.GetReqID(r.Context())))
 
 		if r.ContentLength == 0 {
-			log.Warn("missing request body")
+			hlog.Warn("missing request body")
 
 			render.JSON(w, r, resp.Error("invalid request"))
 
@@ -53,84 +47,16 @@ func New(log *slog.Logger, rtStorage RefreshTokenStorage, uStorage UserStorage, 
 		var req Request
 		err := render.DecodeJSON(r.Body, &req)
 		if err != nil {
-			log.Error("failed to decode request", sl.Err(err))
+			hlog.Error("failed to decode request", sl.Err(err))
 
 			render.JSON(w, r, resp.Error("internal error"))
 
 			return
 		}
 
-		token, err := rtStorage.RefreshToken(r.Context(), req.RefreshToken)
+		jwtToken, refreshToken, err := usecase.RefreshSession(r.Context(), secret, req.RefreshToken)
 		if err != nil {
-			if errors.Is(err, storage.ErrRefreshTokenNotFound) {
-				log.Warn("refresh token not found", sl.Err(err))
-
-				render.JSON(w, r, resp.Error("internal error"))
-
-				return
-			}
-
-			log.Error("failed to refresh token", sl.Err(err))
-
-			render.JSON(w, r, resp.Error("internal error"))
-
-			return
-		}
-
-		if token.Used {
-			log.Info("token is used", slog.Int64("token_id", token.ID))
-
-			render.JSON(w, r, resp.Error("token is unavailable"))
-
-			return
-		}
-
-		_, err = jwt.Parse(token.Token, func(token *jwt.Token) (any, error) {
-			return []byte(secret), nil
-		}, jwt.WithExpirationRequired())
-		if err != nil {
-			if errors.Is(err, jwt.ErrTokenExpired) {
-				log.Info("token expired", slog.Int64("token_id", token.ID))
-
-				render.JSON(w, r, resp.Error("token expired"))
-
-				return
-			}
-		}
-
-		// TODO: deactivate if used
-
-		user, err := uStorage.UserById(r.Context(), token.UserID)
-		if err != nil {
-			if errors.Is(err, storage.ErrUserNotFound) {
-				log.Error("user not found", slog.Int64("token_id", token.ID))
-
-				render.JSON(w, r, resp.Error("user not found"))
-
-				return
-			}
-
-			log.Error("errors occurred")
-
-			render.JSON(w, r, "internal error")
-
-			return
-		}
-
-		jwtToken, err := jwtgen.NewToken(user, secret, tokenTTL)
-		if err != nil {
-			log.Error("failed to generate access token", sl.Err(err))
-
-			render.JSON(w, r, "internal error")
-
-			return
-		}
-
-		refreshToken, err := jwtgen.NewRefreshToken(user, secret, rtTTL)
-		if err != nil {
-			log.Error("failed to generate refresh token", sl.Err(err))
-
-			render.JSON(w, r, "internal error")
+			handleError(w, r, err)
 
 			return
 		}
@@ -140,6 +66,28 @@ func New(log *slog.Logger, rtStorage RefreshTokenStorage, uStorage UserStorage, 
 			Token:        jwtToken,
 			RefreshToken: refreshToken,
 		})
+	}
+}
 
+func handleError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, storage.ErrRefreshTokenNotFound):
+		render.JSON(w, r, resp.Error("refresh token not found"))
+	case errors.Is(err, usecase.ErrTokenUsed):
+		render.JSON(w, r, resp.Error("refresh token is unavailable"))
+	case errors.Is(err, jwt.ErrTokenExpired):
+		render.JSON(w, r, resp.Error("token expired"))
+	default:
+		render.JSON(w, r, resp.Error("internal error"))
+	}
+}
+
+func NewUsecase(log *slog.Logger, rtStorage tokenrefreshuc.RefreshTokenStorage, uStorage tokenrefreshuc.UserStorage, tokenTTL, rtTTL time.Duration) *tokenrefreshuc.TokenRefreshUseCase {
+	return &tokenrefreshuc.TokenRefreshUseCase{
+		Log:       log,
+		RtStorage: rtStorage,
+		UStorage:  uStorage,
+		TokenTTL:  tokenTTL,
+		RtTTL:     rtTTL,
 	}
 }

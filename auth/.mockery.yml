@@ -1,0 +1,14 @@
+all: true
+filename: mocks.go
+force-file-write: false
+formatter: goimports
+log-level: info
+structname: '{{.Mock}}{{.InterfaceName}}'
+pkgname: '{{.SrcPackageName}}'
+recursive: true
+template: testify
+dir: '{{.InterfaceDir}}/mocks'
+packages:
+  auth/internal/http-server/handlers/user:
+    config:
+      all: true

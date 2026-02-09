@@ -1,4 +1,4 @@
-package login
+package register
 
 import (
 	"auth/internal/lib/logger/sl"
@@ -16,7 +16,7 @@ import (
 )
 
 type Request struct {
-	Email    string `json:"email" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
 }
 

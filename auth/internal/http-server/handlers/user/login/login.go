@@ -1,8 +1,8 @@
 package login
 
 import (
-	"auth/internal/domain/models"
-	"auth/internal/lib/jwt/jwtgen"
+	"auth/internal/application/usecase"
+	"auth/internal/application/usecase/loginuc"
 	"auth/internal/lib/logger/sl"
 	"auth/internal/storage"
 	resp "auth/pkg/api/resp"
@@ -15,8 +15,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/go-playground/validator"
-	"golang.org/x/crypto/bcrypt"
 )
+
+type Usecase interface {
+	Login(ctx context.Context, email, password string) (string, string, error)
+}
 
 type Request struct {
 	Email    string `json:"email" validate:"required"`
@@ -29,15 +32,7 @@ type Response struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-type UserGetter interface {
-	User(ctx context.Context, email string) (*models.User, error)
-}
-
-type RefreshTokenSaver interface {
-	SaveRefreshToken(ctx context.Context, rt models.RefreshToken) error
-}
-
-func New(log *slog.Logger, getter UserGetter, rts RefreshTokenSaver, secret string, tokenTTL time.Duration, rtTTL time.Duration) http.HandlerFunc {
+func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 	const op = "http-server.handlers.user.login.New"
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := log.With(slog.String("op", op), slog.String("req-id", middleware.GetReqID(r.Context())))
@@ -69,63 +64,9 @@ func New(log *slog.Logger, getter UserGetter, rts RefreshTokenSaver, secret stri
 			return
 		}
 
-		user, err := getter.User(r.Context(), req.Email)
+		token, refreshToken, err := usecase.Login(r.Context(), req.Email, req.Password)
 		if err != nil {
-			if errors.Is(err, storage.ErrUserNotFound) {
-				log.Info("user not found", sl.Err(err))
-
-				render.JSON(w, r, resp.Error("user not found"))
-
-				return
-			}
-
-			log.Error("error when getting user", sl.Err(err))
-
-			render.JSON(w, r, resp.Error("internal error"))
-
-			return
-		}
-
-		err = bcrypt.CompareHashAndPassword(user.PassHash, []byte(req.Password))
-		if err != nil {
-			log.Info("failed to login", slog.Int64("user_id", user.ID))
-
-			render.JSON(w, r, resp.Error("failed to login. Incorrect login or password"))
-
-			return
-		}
-
-		token, err := jwtgen.NewToken(user, secret, tokenTTL)
-		if err != nil {
-			log.Error("failed to generate JWT token", sl.Err(err))
-
-			resp.Error("internal error")
-
-			return
-		}
-
-		refreshToken, err := jwtgen.NewRefreshToken(user, secret, rtTTL)
-		if err != nil {
-			log.Error("failed to generate JWT token", sl.Err(err))
-
-			resp.Error("internal error")
-
-			return
-		}
-
-		err = rts.SaveRefreshToken(r.Context(), models.RefreshToken{Token: refreshToken, UserID: user.ID})
-		if err != nil {
-			if errors.Is(err, storage.ErrRefreshTokenExists) {
-				log.Error("failed to generate unique JWT", sl.Err(err))
-
-				render.JSON(w, r, resp.Error("internal error"))
-
-				return
-			}
-
-			log.Error("failed to save refresh token", sl.Err(err))
-
-			render.JSON(w, r, resp.Error("internal error"))
+			handleError(w, r, err)
 
 			return
 		}
@@ -137,5 +78,27 @@ func New(log *slog.Logger, getter UserGetter, rts RefreshTokenSaver, secret stri
 		})
 
 		return
+	}
+}
+
+func handleError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, storage.ErrUserNotFound):
+		render.JSON(w, r, resp.Error("user not found"))
+	case errors.Is(err, usecase.ErrWrongLoginOrPassword):
+		render.JSON(w, r, resp.Error("failed to login. Incorrect login or password"))
+	default:
+		render.JSON(w, r, resp.Error("internal error"))
+	}
+}
+
+func NewUsecase(log *slog.Logger, ugetter loginuc.UserGetter, rtsaver loginuc.RefreshTokenSaver, secret string, tokenTTL, rtTTL time.Duration) *loginuc.LoginUseCase {
+	return &loginuc.LoginUseCase{
+		Log:      log,
+		Ugetter:  ugetter,
+		RtSaver:  rtsaver,
+		Secret:   secret,
+		TokenTTL: tokenTTL,
+		RtTTL:    rtTTL,
 	}
 }
