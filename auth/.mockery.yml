@@ -9,6 +9,6 @@ recursive: true
 template: testify
 dir: '{{.InterfaceDir}}/mocks'
 packages:
-  auth/internal/http-server/handlers/user:
+  auth/internal/http-server/handlers/user: # TODO: should add generate mocks to .gitignore
     config:
       all: true

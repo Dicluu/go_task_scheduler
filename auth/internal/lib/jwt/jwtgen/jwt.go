@@ -7,11 +7,17 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	ACCESS_TOKEN_TYPE  = "access"
+	REFRESH_TOKEN_TYPE = "refresh"
+)
+
 func NewToken(user *models.User, secret string, duration time.Duration) (string, error) {
 	claims := make(map[string]any)
 
 	claims["uid"] = user.ID
 	claims["exp"] = time.Now().Add(duration).Unix()
+	claims["type"] = ACCESS_TOKEN_TYPE
 
 	return generateToken(claims, secret)
 }
@@ -21,7 +27,7 @@ func NewRefreshToken(user *models.User, secret string, duration time.Duration) (
 
 	claims["uid"] = user.ID
 	claims["exp"] = time.Now().Add(duration).Unix()
-	claims["type"] = "refresh"
+	claims["type"] = REFRESH_TOKEN_TYPE
 
 	return generateToken(claims, secret)
 }
