@@ -2,6 +2,7 @@ package fetchtask
 
 import (
 	"context"
+	"task/internal/domain/models"
 	"task/internal/domain/models/task"
 )
 
@@ -13,10 +14,14 @@ type TaskFetcher interface {
 	Task(ctx context.Context, taskId int64) (task.Task, error)
 }
 
-func (u *Usecase) Task(ctx context.Context, taskId int64) (task.Task, error) {
-	task, err := u.fetcher.Task(ctx, taskId)
+func (u *Usecase) Task(ctx context.Context, taskId, userId int64) (task.Task, error) {
+	t, err := u.fetcher.Task(ctx, taskId)
 
-	return task, err
+	if !t.CanBeViewedBy(userId) {
+		return task.Task{}, models.ErrCannotViewRecord
+	}
+
+	return t, err
 }
 
 func New(fetcher TaskFetcher) *Usecase {

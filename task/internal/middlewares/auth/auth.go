@@ -78,6 +78,8 @@ func Middleware(log *slog.Logger, secret string) func(http.Handler) http.Handler
 				return
 			}
 
+			// TODO: make user as domain, not int value
+			// TODO: move key to const
 			ctx := context.WithValue(r.Context(), "user", claims.UserId)
 
 			next.ServeHTTP(w, r.WithContext(ctx))

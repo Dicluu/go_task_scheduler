@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"task/internal/domain/models"
 	"task/internal/domain/models/task"
 	"task/internal/lib/logger/sl"
 	"task/internal/storage"
@@ -21,7 +22,7 @@ type Response struct {
 }
 
 type Usecase interface {
-	Delete(ctx context.Context, task *task.Task) error
+	Delete(ctx context.Context, task *task.Task, userId int64) error
 }
 
 func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
@@ -44,10 +45,20 @@ func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 
 		log = log.With(slog.Int64("task-id", taskId))
 
+		userId := r.Context().Value("user").(int64)
+
 		err = usecase.Delete(r.Context(), &task.Task{
 			Id: taskId,
-		})
+		}, userId)
 		if err != nil {
+			if errors.Is(err, models.ErrCannotDeleteRecord) {
+				log.Warn("attempt to delete record of another person")
+
+				render.JSON(w, r, resp.Error("you can't delete this task"))
+
+				return
+			}
+
 			if errors.Is(err, storage.ErrTaskNotFound) {
 				log.Info("task not found")
 

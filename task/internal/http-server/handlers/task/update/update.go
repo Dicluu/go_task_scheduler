@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"task/internal/domain/models"
 	"task/internal/domain/models/task"
 	"task/internal/lib/logger/sl"
 	"task/internal/storage"
@@ -29,7 +30,7 @@ type Response struct {
 }
 
 type Usecase interface {
-	Update(ctx context.Context, task *task.Task) error
+	Update(ctx context.Context, task *task.Task, userId int64) error
 }
 
 func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
@@ -79,13 +80,23 @@ func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 			return
 		}
 
+		userId := r.Context().Value("user").(int64)
+
 		err = usecase.Update(r.Context(), &task.Task{
 			Id:          taskId,
 			Name:        req.Name,
 			Description: req.Description,
 			StartsAt:    req.StartsAt,
-		})
+		}, userId)
 		if err != nil {
+			if errors.Is(err, models.ErrCannotUpdateRecord) {
+				log.Warn("attempt to update record of another person")
+
+				render.JSON(w, r, resp.Error("you can't update this task"))
+
+				return
+			}
+
 			if errors.Is(err, storage.ErrTaskNotFound) {
 				log.Info("task not found")
 

@@ -45,7 +45,6 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.Recoverer, middleware.Logger, auth.Middleware(log, cfg.Secret))
 
-	// TODO: add authorization for fetch and update
 	r.Post("/tasks", create.New(log, savetask.New(storage)))
 	r.Get("/tasks/{task}", show.New(log, fetchtask.New(storage)))
 	r.Get("/tasks", index.New(log, fetchtasks.New(storage)))

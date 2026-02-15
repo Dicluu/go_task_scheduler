@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"task/internal/domain/models"
 	"task/internal/domain/models/task"
 	"task/internal/lib/logger/sl"
 	"task/internal/storage"
@@ -17,7 +18,7 @@ import (
 )
 
 type Usecase interface {
-	Task(ctx context.Context, taskId int64) (task.Task, error)
+	Task(ctx context.Context, taskId, userId int64) (task.Task, error)
 }
 
 type Response struct {
@@ -47,8 +48,18 @@ func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 			return
 		}
 
-		task, err := usecase.Task(r.Context(), taskId)
+		userId := r.Context().Value("user").(int64)
+
+		t, err := usecase.Task(r.Context(), taskId, userId)
 		if err != nil {
+			if errors.Is(err, models.ErrCannotViewRecord) {
+				log.Warn("attempt to view record of another person")
+
+				render.JSON(w, r, resp.Error("you can't see this task"))
+
+				return
+			}
+
 			if errors.Is(err, storage.ErrTaskNotFound) {
 				log.Warn("task not found", sl.Err(err))
 
@@ -65,10 +76,10 @@ func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 		}
 
 		render.JSON(w, r, Response{
-			Name:        task.Name,
-			Description: task.Description,
-			StartsAt:    task.StartsAt.Format("2006.01.02 15:04:05"),
-			UserId:      task.UserId,
+			Name:        t.Name,
+			Description: t.Description,
+			StartsAt:    t.StartsAt.Format("2006.01.02 15:04:05"),
+			UserId:      t.UserId,
 			Resp:        resp.OK(),
 		})
 
