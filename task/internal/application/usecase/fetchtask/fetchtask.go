@@ -3,7 +3,6 @@ package fetchtask
 import (
 	"context"
 	"task/internal/domain/models"
-	"task/internal/domain/models/task"
 )
 
 type Usecase struct {
@@ -11,14 +10,14 @@ type Usecase struct {
 }
 
 type TaskFetcher interface {
-	Task(ctx context.Context, taskId int64) (task.Task, error)
+	Task(ctx context.Context, taskId int64) (models.Task, error)
 }
 
-func (u *Usecase) Task(ctx context.Context, taskId, userId int64) (task.Task, error) {
+func (u *Usecase) Task(ctx context.Context, taskId, userId int64) (models.Task, error) {
 	t, err := u.fetcher.Task(ctx, taskId)
 
 	if !t.CanBeViewedBy(userId) {
-		return task.Task{}, models.ErrCannotViewRecord
+		return models.Task{}, models.ErrCannotViewRecord
 	}
 
 	return t, err

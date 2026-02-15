@@ -6,12 +6,15 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"task/internal/domain/models"
 	"task/internal/lib/logger/sl"
 	resp "task/pkg/api/resp"
 
 	"github.com/go-chi/render"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+const USER = "user"
 
 type authClaims struct {
 	jwt.RegisteredClaims
@@ -78,11 +81,22 @@ func Middleware(log *slog.Logger, secret string) func(http.Handler) http.Handler
 				return
 			}
 
-			// TODO: make user as domain, not int value
-			// TODO: move key to const
-			ctx := context.WithValue(r.Context(), "user", claims.UserId)
+			user := models.User{
+				Id: claims.UserId,
+			}
+
+			ctx := context.WithValue(r.Context(), USER, user)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func GetUser(r *http.Request) (models.User, error) {
+	u, ok := r.Context().Value(USER).(models.User)
+	if !ok {
+		return models.User{}, models.ErrUnauthorized
+	}
+
+	return u, nil
 }

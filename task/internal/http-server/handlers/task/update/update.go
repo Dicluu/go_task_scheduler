@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"task/internal/domain/models"
-	"task/internal/domain/models/task"
 	"task/internal/lib/logger/sl"
+	"task/internal/middlewares/auth"
 	"task/internal/storage"
 	resp "task/pkg/api/resp"
 	"time"
@@ -30,7 +30,7 @@ type Response struct {
 }
 
 type Usecase interface {
-	Update(ctx context.Context, task *task.Task, userId int64) error
+	Update(ctx context.Context, task *models.Task, userId int64) error
 }
 
 func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
@@ -80,14 +80,29 @@ func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 			return
 		}
 
-		userId := r.Context().Value("user").(int64)
+		user, err := auth.GetUser(r)
+		if err != nil {
+			if errors.Is(err, models.ErrUnauthorized) {
+				log.Warn("failed to get user from context; maybe middleware is not provided properly")
 
-		err = usecase.Update(r.Context(), &task.Task{
+				render.JSON(w, r, resp.Error("unauthorized"))
+
+				return
+			}
+
+			log.Error("failed to get user from context", sl.Err(err))
+
+			render.JSON(w, r, resp.Error("internal error"))
+
+			return
+		}
+
+		err = usecase.Update(r.Context(), &models.Task{
 			Id:          taskId,
 			Name:        req.Name,
 			Description: req.Description,
 			StartsAt:    req.StartsAt,
-		}, userId)
+		}, user.Id)
 		if err != nil {
 			if errors.Is(err, models.ErrCannotUpdateRecord) {
 				log.Warn("attempt to update record of another person")

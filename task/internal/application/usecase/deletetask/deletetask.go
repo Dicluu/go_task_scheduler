@@ -3,7 +3,6 @@ package deletetask
 import (
 	"context"
 	"task/internal/domain/models"
-	"task/internal/domain/models/task"
 )
 
 type Usecase struct {
@@ -11,7 +10,7 @@ type Usecase struct {
 }
 
 type TaskDeleter interface {
-	Task(ctx context.Context, taskId int64) (task.Task, error)
+	Task(ctx context.Context, taskId int64) (models.Task, error)
 	DeleteTask(ctx context.Context, taskId int64) error
 }
 
@@ -21,7 +20,7 @@ func New(deleter TaskDeleter) *Usecase {
 	}
 }
 
-func (u *Usecase) Delete(ctx context.Context, task *task.Task, userId int64) error {
+func (u *Usecase) Delete(ctx context.Context, task *models.Task, userId int64) error {
 	t, err := u.deleter.Task(ctx, task.Id)
 	if err != nil {
 		return err

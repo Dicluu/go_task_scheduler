@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"task/internal/domain/models"
-	"task/internal/domain/models/task"
 	"task/internal/lib/logger/sl"
+	"task/internal/middlewares/auth"
 	"task/internal/storage"
 	resp "task/pkg/api/resp"
 
@@ -18,7 +18,7 @@ import (
 )
 
 type Usecase interface {
-	Task(ctx context.Context, taskId, userId int64) (task.Task, error)
+	Task(ctx context.Context, taskId, userId int64) (models.Task, error)
 }
 
 type Response struct {
@@ -48,9 +48,24 @@ func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 			return
 		}
 
-		userId := r.Context().Value("user").(int64)
+		user, err := auth.GetUser(r)
+		if err != nil {
+			if errors.Is(err, models.ErrUnauthorized) {
+				log.Warn("failed to get user from context; maybe middleware is not provided properly")
 
-		t, err := usecase.Task(r.Context(), taskId, userId)
+				render.JSON(w, r, resp.Error("unauthorized"))
+
+				return
+			}
+
+			log.Error("failed to get user from context", sl.Err(err))
+
+			render.JSON(w, r, resp.Error("internal error"))
+
+			return
+		}
+
+		t, err := usecase.Task(r.Context(), taskId, user.Id)
 		if err != nil {
 			if errors.Is(err, models.ErrCannotViewRecord) {
 				log.Warn("attempt to view record of another person")

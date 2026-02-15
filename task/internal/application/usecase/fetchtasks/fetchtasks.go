@@ -2,7 +2,7 @@ package fetchtasks
 
 import (
 	"context"
-	"task/internal/domain/models/task"
+	"task/internal/domain/models"
 )
 
 type Usecase struct {
@@ -10,7 +10,7 @@ type Usecase struct {
 }
 
 type TaskFetcher interface {
-	Tasks(ctx context.Context, limit, offset int, userId int64) ([]task.Task, error)
+	Tasks(ctx context.Context, limit, offset int, userId int64) ([]models.Task, error)
 }
 
 func New(fetcher TaskFetcher) *Usecase {
@@ -19,6 +19,6 @@ func New(fetcher TaskFetcher) *Usecase {
 	}
 }
 
-func (u *Usecase) Tasks(ctx context.Context, limit, offset int, userId int64) ([]task.Task, error) {
+func (u *Usecase) Tasks(ctx context.Context, limit, offset int, userId int64) ([]models.Task, error) {
 	return u.Fetcher.Tasks(ctx, limit, offset, userId)
 }

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"task/internal/domain/models/task"
+	"task/internal/domain/models"
 	"task/internal/storage"
 	"time"
 
@@ -43,19 +43,19 @@ func (s *Storage) SaveTask(ctx context.Context, name, description string, starts
 	return taskId, nil
 }
 
-func (s *Storage) Task(ctx context.Context, taskId int64) (task.Task, error) {
+func (s *Storage) Task(ctx context.Context, taskId int64) (models.Task, error) {
 	const op = "storage.sqlite.Task"
 
-	var t task.Task
+	var t models.Task
 
 	err := s.db.QueryRowContext(ctx, "SELECT name, description, starts_at, user_id FROM tasks WHERE id = ?", taskId).
 		Scan(&t.Name, &t.Description, &t.StartsAt, &t.UserId)
 	if err != nil {
 		if errors.Is(err, sqlite3.ErrNotFound) || errors.Is(err, sql.ErrNoRows) {
-			return task.Task{}, fmt.Errorf("%s: %w", op, storage.ErrTaskNotFound)
+			return models.Task{}, fmt.Errorf("%s: %w", op, storage.ErrTaskNotFound)
 		}
 
-		return task.Task{}, fmt.Errorf("%s: %w", op, err)
+		return models.Task{}, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return t, nil
@@ -91,22 +91,22 @@ func (s *Storage) DeleteTask(ctx context.Context, taskId int64) error {
 	return nil
 }
 
-func (s *Storage) Tasks(ctx context.Context, limit, offset int, userId int64) ([]task.Task, error) {
+func (s *Storage) Tasks(ctx context.Context, limit, offset int, userId int64) ([]models.Task, error) {
 	const op = "storage.sqlite.Tasks"
 
-	tasks := make([]task.Task, 0)
+	tasks := make([]models.Task, 0)
 
 	res, err := s.db.QueryContext(ctx, "SELECT id, name, description, starts_at FROM tasks WHERE user_id = ? LIMIT ? OFFSET ?", userId, limit, offset)
 	if err != nil {
-		return []task.Task{}, fmt.Errorf("%s: %w", op, err)
+		return []models.Task{}, fmt.Errorf("%s: %w", op, err)
 	}
 
-	var r task.Task
+	var r models.Task
 
 	for res.Next() {
 		err := res.Scan(&r.Id, &r.Name, &r.Description, &r.StartsAt)
 		if err != nil {
-			return []task.Task{}, fmt.Errorf("%s: %w", op, err)
+			return []models.Task{}, fmt.Errorf("%s: %w", op, err)
 		}
 
 		tasks = append(tasks, r)

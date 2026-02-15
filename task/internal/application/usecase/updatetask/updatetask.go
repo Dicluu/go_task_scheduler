@@ -3,7 +3,6 @@ package updatetask
 import (
 	"context"
 	"task/internal/domain/models"
-	"task/internal/domain/models/task"
 	"time"
 )
 
@@ -12,7 +11,7 @@ type Usecase struct {
 }
 
 type TaskUpdater interface {
-	Task(ctx context.Context, taskId int64) (task.Task, error)
+	Task(ctx context.Context, taskId int64) (models.Task, error)
 	UpdateTask(ctx context.Context, name, description string, startsAt time.Time, taskId int64) error
 }
 
@@ -22,7 +21,7 @@ func New(taskUpdater TaskUpdater) *Usecase {
 	}
 }
 
-func (u *Usecase) Update(ctx context.Context, inTask *task.Task, userId int64) error {
+func (u *Usecase) Update(ctx context.Context, inTask *models.Task, userId int64) error {
 
 	t, err := u.updater.Task(ctx, inTask.Id)
 	if err != nil {

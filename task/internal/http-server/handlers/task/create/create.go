@@ -2,10 +2,12 @@ package create
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
-	"task/internal/domain/models/task"
+	"task/internal/domain/models"
 	"task/internal/lib/logger/sl"
+	"task/internal/middlewares/auth"
 	resp "task/pkg/api/resp"
 	"time"
 
@@ -26,7 +28,7 @@ type Response struct {
 }
 
 type Usecase interface {
-	Save(ctx context.Context, task *task.Task) (int64, error)
+	Save(ctx context.Context, task *models.Task) (int64, error)
 }
 
 func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
@@ -65,11 +67,28 @@ func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 			return
 		}
 
-		taskId, err := usecase.Save(r.Context(), &task.Task{
+		user, err := auth.GetUser(r)
+		if err != nil {
+			if errors.Is(err, models.ErrUnauthorized) {
+				log.Warn("failed to get user from context; maybe middleware is not provided properly")
+
+				render.JSON(w, r, resp.Error("unauthorized"))
+
+				return
+			}
+
+			log.Error("failed to get user from context", sl.Err(err))
+
+			render.JSON(w, r, resp.Error("internal error"))
+
+			return
+		}
+
+		taskId, err := usecase.Save(r.Context(), &models.Task{
 			Name:        req.Name,
 			Description: req.Description,
 			StartsAt:    req.StartsAt,
-			UserId:      r.Context().Value("user").(int64),
+			UserId:      user.Id,
 		})
 		if err != nil {
 			log.Error("failed to save task", sl.Err(err))

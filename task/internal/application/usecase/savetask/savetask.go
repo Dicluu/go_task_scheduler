@@ -2,7 +2,7 @@ package savetask
 
 import (
 	"context"
-	"task/internal/domain/models/task"
+	"task/internal/domain/models"
 	"time"
 )
 
@@ -18,7 +18,7 @@ func New(saver TaskSaver) *Usecase {
 	return &Usecase{saver: saver}
 }
 
-func (u *Usecase) Save(ctx context.Context, task *task.Task) (int64, error) {
+func (u *Usecase) Save(ctx context.Context, task *models.Task) (int64, error) {
 	recordId, err := u.saver.SaveTask(ctx, task.Name, task.Description, task.StartsAt, task.UserId)
 
 	return recordId, err
