@@ -1,1 +1,1 @@
-ALTER TABLE tasks ADD status varchar(255) default 'DONE'
+ALTER TABLE tasks ADD status varchar(255) default 'done'
