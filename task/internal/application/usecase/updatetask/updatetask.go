@@ -12,7 +12,7 @@ type Usecase struct {
 
 type TaskUpdater interface {
 	Task(ctx context.Context, taskId int64) (models.Task, error)
-	UpdateTask(ctx context.Context, name, description string, startsAt time.Time, taskId int64) error
+	UpdateTask(ctx context.Context, name, description, status string, startsAt time.Time, taskId int64) error
 }
 
 func New(taskUpdater TaskUpdater) *Usecase {
@@ -32,7 +32,7 @@ func (u *Usecase) Update(ctx context.Context, inTask *models.Task, userId int64)
 		return models.ErrCannotUpdateRecord
 	}
 
-	err = u.updater.UpdateTask(ctx, inTask.Name, inTask.Description, inTask.StartsAt, inTask.Id)
+	err = u.updater.UpdateTask(ctx, inTask.Name, inTask.Description, inTask.Status, inTask.StartsAt, inTask.Id)
 
 	return nil
 }

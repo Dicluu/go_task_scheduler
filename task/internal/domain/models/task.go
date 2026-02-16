@@ -4,11 +4,17 @@ import "time"
 
 // TODO: add status
 
+const (
+	TASK_STATUS_DONE = "done"
+	TASK_STATUS_TODO = "todo"
+)
+
 type Task struct {
 	Id          int64     `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	StartsAt    time.Time `json:"starts_at"`
+	Status      string    `json:"status"`
 	UserId      int64     `json:"-"`
 }
 

@@ -21,8 +21,9 @@ import (
 
 type Request struct {
 	Name        string    `json:"name" validate:"required"`
-	Description string    `json:"description"`
+	Description string    `json:"description" validate:"required"`
 	StartsAt    time.Time `json:"starts_at" validate:"required"`
+	Status      string    `json:"status" validate:"required,oneof=done todo"`
 }
 
 type Response struct {
@@ -101,6 +102,7 @@ func New(log *slog.Logger, usecase Usecase) http.HandlerFunc {
 			Id:          taskId,
 			Name:        req.Name,
 			Description: req.Description,
+			Status:      req.Status,
 			StartsAt:    req.StartsAt,
 		}, user.Id)
 		if err != nil {
