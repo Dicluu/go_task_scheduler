@@ -1,0 +1,13 @@
+env: "local" # dev, prod
+storage_path: "./storage/task.db"
+server:
+  address: "localhost:8001"
+  timeout: 4s
+  idle_timeout: 60s
+email:
+  username: "test"
+  password: "pass"
+  host: "test_host"
+  port: "test_port"
+  from: "test_from"
+  is_tls: false
