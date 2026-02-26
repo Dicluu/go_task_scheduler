@@ -13,6 +13,7 @@ type Config struct {
 	StoragePath string     `yaml:"storage_path" env-required:"true"`
 	HttpServer  HttpServer `yaml:"server" env-required:"true"`
 	SmtpServer  SmtpServer `yaml:"email" env-required:"true"`
+	Kafka       Kafka      `yaml:"kafka" env-required:"true"`
 }
 
 type HttpServer struct {
@@ -28,6 +29,10 @@ type SmtpServer struct {
 	Port     int    `yaml:"port"`
 	From     string `yaml:"from"`
 	IsTls    bool   `yaml:"is_tls"`
+}
+
+type Kafka struct {
+	Servers []string
 }
 
 func MustLoad() *Config {

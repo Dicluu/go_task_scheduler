@@ -11,3 +11,6 @@ email:
   port: "test_port"
   from: "test_from"
   is_tls: false
+kafka:
+  servers:
+    - "localhost:9092"

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"notification/internal/domain/models"
 	"notification/internal/storage"
 
 	"github.com/mattn/go-sqlite3"
@@ -25,10 +26,10 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) SaveUser(ctx context.Context, email string) (int64, error) {
+func (s *Storage) SaveUser(ctx context.Context, user models.User) (int64, error) {
 	const op = "storage.sqlite.SaveUser"
 
-	res, err := s.db.ExecContext(ctx, "INSERT INTO users(email) VALUES(?)", email)
+	res, err := s.db.ExecContext(ctx, "INSERT INTO users(user_id, email) VALUES(?, ?)", user.UserId, user.Email)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
@@ -41,6 +42,7 @@ func (s *Storage) SaveUser(ctx context.Context, email string) (int64, error) {
 	return userId, nil
 }
 
+// TODO: use domain model as param
 func (s *Storage) UpdateUser(ctx context.Context, email string, userId int64) error {
 	const op = "storage.sqlite.UpdateUser"
 
@@ -56,6 +58,7 @@ func (s *Storage) UpdateUser(ctx context.Context, email string, userId int64) er
 	return nil
 }
 
+// TODO: use domain model as param
 func (s *Storage) DeleteUser(ctx context.Context, userId int64) error {
 	const op = "storage.sqlite.DeleteUser"
 
