@@ -7,3 +7,6 @@ server:
   address: "localhost:8000"
   timeout: 4s
   idle_timeout: 60s
+kafka:
+  servers:
+    - "localhost:9092"

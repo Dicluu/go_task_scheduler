@@ -11,16 +11,21 @@ import (
 type Config struct {
 	Env             string        `yaml:"env" env-default:"local"`
 	StoragePath     string        `yaml:"storage_path" env-required:"true"`
+	Secret          string        `yaml:"secret" env-required:"true"`
 	TokenTTL        time.Duration `yaml:"token_ttl" env-required:"true"`
 	RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl" env-required:"true"`
 	HttpServer      HttpServer    `yaml:"server" env-required:"true"`
-	Secret          string        `yaml:"secret" env-required:"true"`
+	Kafka           Kafka         `yaml:"kafka" env-required:"true"`
 }
 
 type HttpServer struct {
 	Address     string        `yaml:"address" env-required:"true"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
+}
+
+type Kafka struct {
+	Servers []string `yaml:"servers"`
 }
 
 func MustLoad() *Config {

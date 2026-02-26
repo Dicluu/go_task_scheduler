@@ -1,9 +1,9 @@
 package register
 
 import (
+	"auth/internal/application/usecase"
 	register "auth/internal/http-server/handlers/user/register/mocks"
 	"auth/internal/lib/logger/handlers/slogdiscard"
-	"auth/internal/storage"
 	"auth/pkg/testhlpr"
 	"context"
 	"encoding/json"
@@ -53,18 +53,18 @@ func TestSaveUserHandler(t *testing.T) {
 			email:     "test@test.ru",
 			password:  "12345",
 			respError: "user already exists",
-			mockErr:   storage.ErrUserExists,
+			mockErr:   usecase.ErrUserAlreadyExists,
 		},
 	}
 
 	for _, tc := range testTable {
 		t.Run(tc.name, func(t *testing.T) {
 
-			userSaverMock := register.NewMockUserSaver(t)
+			userSaverMock := register.NewMockUsecase(t)
 
 			if tc.respError == "" || tc.mockErr != nil {
 				userSaverMock.EXPECT().
-					SaveUser(context.Background(), tc.email, mock.AnythingOfType("[]uint8")).
+					Register(context.Background(), tc.email, mock.AnythingOfType("string")).
 					Return(int64(1), tc.mockErr).
 					Once()
 			}

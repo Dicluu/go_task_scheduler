@@ -8,6 +8,7 @@ import (
 	"auth/internal/lib/logger/logger"
 	"auth/internal/lib/logger/sl"
 	"auth/internal/storage/sqlite"
+	"auth/pkg/kafka"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +31,13 @@ func main() {
 
 	log.Info("starting application", slog.String("env", cfg.Env))
 
+	p, err := kafka.NewProducer(cfg.Kafka.Servers)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Info("kafka initialized", slog.String("hosts", strings.Join(cfg.Kafka.Servers, ",")))
+
 	storage, err := sqlite.New(cfg.StoragePath)
 	if err != nil {
 		return
@@ -36,9 +45,8 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.Recoverer, middleware.Logger)
-
-	// TODO: maybe move logic to services
-	r.Post("/register", reg.New(log, storage))
+	
+	r.Post("/register", reg.New(log, reg.NewUsecase(storage, log, p)))
 	r.Post("/login", login.New(log, login.NewUsecase(log, storage, storage, cfg.Secret, cfg.TokenTTL, cfg.RefreshTokenTTL)))
 	r.Post("/refresh", refresh.New(log, refresh.NewUsecase(log, storage, storage, cfg.TokenTTL, cfg.RefreshTokenTTL), cfg.Secret))
 
