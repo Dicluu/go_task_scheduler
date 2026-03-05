@@ -11,13 +11,14 @@ import (
 type Config struct {
 	Env         string     `yaml:"env" env-default:"local"`
 	StoragePath string     `yaml:"storage_path" env-required:"true"`
-	HttpServer  HttpServer `yaml:"server" env-required:"true"`
+	GRPCServer  GRPCServer `yaml:"server" env-required:"true"`
 	SmtpServer  SmtpServer `yaml:"email" env-required:"true"`
 	Kafka       Kafka      `yaml:"kafka" env-required:"true"`
 }
 
-type HttpServer struct {
+type GRPCServer struct {
 	Address     string        `yaml:"address" env-required:"true"`
+	Port        int           `yaml:"port" env-required:"true"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
 }
