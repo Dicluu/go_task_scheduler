@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package notify;
+
+option go_package = "task/pkg/protos/gen/go/notify;notifyv1"; // local import path provided
+
+service Notifier {
+  rpc Notify (stream NotifyRequest) returns (NotifyResponse);
+}
+
+message Item {
+  string name = 1;
+  string date = 2;
+  int64 user_id = 3;
+}
+
+message NotifyRequest {
+  repeated Item items = 1;
+}
+
+message NotifyResponse {
+  bool success = 1;
+}

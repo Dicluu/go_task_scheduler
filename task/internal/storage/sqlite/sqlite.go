@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"task/internal/domain/models"
 	"task/internal/storage"
 	"time"
@@ -27,6 +29,7 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
+// TODO: use domain as param
 func (s *Storage) SaveTask(ctx context.Context, name, description string, startsAt time.Time, userId int64) (int64, error) {
 	const op = "storage.sqlite.SaveTask"
 
@@ -61,6 +64,7 @@ func (s *Storage) Task(ctx context.Context, taskId int64) (models.Task, error) {
 	return t, nil
 }
 
+// TODO: use domain as param
 func (s *Storage) UpdateTask(ctx context.Context, name, description, status string, startsAt time.Time, taskId int64) error {
 	const op = "storage.sqlite.UpdateTask"
 
@@ -76,6 +80,7 @@ func (s *Storage) UpdateTask(ctx context.Context, name, description, status stri
 	return nil
 }
 
+// TODO: use domain as param
 func (s *Storage) DeleteTask(ctx context.Context, taskId int64) error {
 	const op = "storage.sqlite.DeleteTask"
 
@@ -113,4 +118,47 @@ func (s *Storage) Tasks(ctx context.Context, limit, offset int, userId int64) ([
 	}
 
 	return tasks, nil
+}
+
+func (s *Storage) TasksReadyNotify(ctx context.Context) ([]models.Task, error) {
+	const op = "storage.sqlite.TasksReadyNotify"
+
+	tasks := make([]models.Task, 0)
+
+	res, err := s.db.QueryContext(ctx, "SELECT id, name, starts_at, user_id FROM tasks WHERE is_notified = ? AND starts_at <= ?", false, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return []models.Task{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	var r models.Task
+
+	for res.Next() {
+		err := res.Scan(&r.Id, &r.Name, &r.StartsAt, &r.UserId)
+		if err != nil {
+			return []models.Task{}, fmt.Errorf("%s: %w", op, err)
+		}
+
+		tasks = append(tasks, r)
+	}
+
+	return tasks, nil
+}
+
+func (s *Storage) MarkAsNotified(ctx context.Context, tasks []models.Task) error {
+	const op = "storage.sqlite.MarkAsNotified"
+
+	ids := make([]string, 0, len(tasks))
+
+	for _, task := range tasks {
+		ids = append(ids, strconv.Itoa(int(task.Id)))
+	}
+
+	prepare := strings.Join(ids, ",")
+
+	_, err := s.db.ExecContext(ctx, fmt.Sprintf("UPDATE tasks SET is_notified = true WHERE id IN (%s)", prepare))
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }

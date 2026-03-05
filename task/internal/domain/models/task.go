@@ -2,8 +2,6 @@ package models
 
 import "time"
 
-// TODO: add status
-
 const (
 	TASK_STATUS_DONE = "done"
 	TASK_STATUS_TODO = "todo"
@@ -16,6 +14,7 @@ type Task struct {
 	StartsAt    time.Time `json:"starts_at"`
 	Status      string    `json:"status"`
 	UserId      int64     `json:"-"`
+	IsNotified  bool      `json:"-"`
 }
 
 func (t *Task) CanBeUpdatedBy(userId int64) bool {
