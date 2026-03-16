@@ -1,6 +1,7 @@
 package grpcapp
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -15,10 +16,10 @@ type App struct {
 	port       int
 }
 
-func New(log *slog.Logger, port int, notifyService notify.Notifier) *App {
+func New(gctx context.Context, log *slog.Logger, port int, notifyService notify.Notifier) *App {
 	gRPCServer := grpc.NewServer()
 
-	notify.Register(gRPCServer, notifyService, log)
+	notify.Register(gctx, gRPCServer, notifyService, log)
 
 	return &App{
 		log:        log,

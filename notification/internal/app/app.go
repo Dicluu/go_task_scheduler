@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	seadapter "notification/internal/adapters/sendemail"
 	grpcapp "notification/internal/app/grpc"
@@ -13,7 +14,7 @@ type App struct {
 	GRPCServer *grpcapp.App
 }
 
-func New(log *slog.Logger, grpcPort int, storagePath string, cfg config.SmtpServer) *App {
+func New(gctx context.Context, log *slog.Logger, grpcPort int, storagePath string, cfg config.SmtpServer) *App {
 	storage, err := sqlite.New(storagePath)
 	if err != nil {
 		panic(err)
@@ -21,7 +22,7 @@ func New(log *slog.Logger, grpcPort int, storagePath string, cfg config.SmtpServ
 
 	notifyService := sendemail.New(storage, seadapter.New(cfg), log)
 
-	grpcApp := grpcapp.New(log, grpcPort, notifyService)
+	grpcApp := grpcapp.New(gctx, log, grpcPort, notifyService)
 
 	return &App{
 		GRPCServer: grpcApp,

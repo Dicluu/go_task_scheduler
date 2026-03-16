@@ -20,65 +20,93 @@ type Notifier interface {
 }
 
 type serverAPI struct {
+	gctx context.Context
 	notifyv1.UnimplementedNotifierServer
 	notifier Notifier
 	log      *slog.Logger
 }
 
-func Register(gRPC *grpc.Server, notifier Notifier, log *slog.Logger) {
-	notifyv1.RegisterNotifierServer(gRPC, &serverAPI{notifier: notifier, log: log})
+func Register(gctx context.Context, gRPC *grpc.Server, notifier Notifier, log *slog.Logger) {
+	notifyv1.RegisterNotifierServer(gRPC, &serverAPI{gctx: gctx, notifier: notifier, log: log})
 }
 
+// TODO: make notifies idempodent
 func (s *serverAPI) Notify(srv notifyv1.Notifier_NotifyServer) error {
 	const op = "internal.grpc.server.Notify"
 	log := s.log.With(slog.String("op", op))
 	ctx := srv.Context()
+	done := make(chan struct{})
+	defer close(done)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		req, err := srv.Recv()
-		if err == io.EOF {
-			return nil
-		}
-
-		if err := validateItems(req); err != nil {
-			log.Warn("missing request items")
-		}
-
-		recipients := make([]models.Notification, 0)
-
-		items := req.GetItems()
-		for _, i := range items {
-			date, err := time.Parse("2006-01-02 15:04:05", i.Date)
+	go func() {
+		for {
+			req, err := srv.Recv()
 			if err != nil {
-				log.Warn("failed to parse date", slog.String("date", i.Date), sl.Err(err))
+				log.Error("gRPC stream closed by interrupt")
+				return
+			}
+			if err == io.EOF {
+				log.Info("stream closed successfully by client")
+				return
+			}
+
+			if err := validateItems(req); err != nil {
+				log.Warn("missing request items")
+			}
+
+			recipients := make([]models.Notification, 0)
+
+			items := req.GetItems()
+			for _, i := range items {
+				date, err := time.Parse("2006-01-02 15:04:05", i.Date)
+				if err != nil {
+					log.Warn("failed to parse date", slog.String("date", i.Date), sl.Err(err))
+
+					continue
+				}
+
+				transfer := dto.NotifyRequestDTO{
+					UserId:   i.UserId,
+					TaskName: i.Name,
+					Date:     date,
+				}
+
+				recipients = append(recipients, *transfer.ToDomain())
+			}
+
+			err = s.notifier.Send(ctx, recipients)
+			if err != nil {
+				log.Error("failed to send notifications", sl.Err(err))
 
 				continue
 			}
 
-			transfer := dto.NotifyRequestDTO{
-				UserId:   i.UserId,
-				TaskName: i.Name,
-				Date:     date,
+			log.Info("notifications are sent")
+		}
+	}()
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			log.Info("client side ctx done")
+			done <- struct{}{}
+		case <-s.gctx.Done():
+			log.Info("server side ctx canceled, RPC stream closes")
+
+			err := srv.SendAndClose(&notifyv1.NotifyResponse{
+				Success: false,
+			})
+
+			if err != nil {
+				log.Error("failed to response client side", sl.Err(err))
 			}
 
-			recipients = append(recipients, *transfer.ToDomain())
+			done <- struct{}{}
 		}
+	}()
 
-		err = s.notifier.Send(ctx, recipients)
-		if err != nil {
-			log.Error("failed to send notifications", sl.Err(err))
-
-			continue
-		}
-
-		s.log.Info("notifications are sent")
-	}
+	<-done
+	return nil
 }
 
 // unary RPC implement

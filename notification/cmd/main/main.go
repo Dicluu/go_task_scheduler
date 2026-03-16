@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"notification/internal/app"
 	"notification/internal/config"
 	"notification/internal/lib/logger/logger"
@@ -16,7 +17,8 @@ func main() {
 
 	log.Info("log initialized")
 
-	application := app.New(log, cfg.GRPCServer.Port, cfg.StoragePath, cfg.SmtpServer)
+	gctx, cancel := context.WithCancel(context.Background())
+	application := app.New(gctx, log, cfg.GRPCServer.Port, cfg.StoragePath, cfg.SmtpServer)
 
 	go application.GRPCServer.MustRun()
 
@@ -25,7 +27,7 @@ func main() {
 
 	<-stop
 
-	// TODO: add graceful shutdown when rpc stream is alive
+	cancel()
 	application.GRPCServer.Stop()
 
 	log.Info("application stopped")
