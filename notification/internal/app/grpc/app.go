@@ -14,9 +14,10 @@ type App struct {
 	log        *slog.Logger
 	gRPCServer *grpc.Server
 	port       int
+	address    string
 }
 
-func New(gctx context.Context, log *slog.Logger, port int, notifyService notify.Notifier) *App {
+func New(gctx context.Context, log *slog.Logger, port int, notifyService notify.Notifier, address string) *App {
 	gRPCServer := grpc.NewServer()
 
 	notify.Register(gctx, gRPCServer, notifyService, log)
@@ -25,6 +26,7 @@ func New(gctx context.Context, log *slog.Logger, port int, notifyService notify.
 		log:        log,
 		gRPCServer: gRPCServer,
 		port:       port,
+		address:    address,
 	}
 }
 
@@ -39,7 +41,7 @@ func (a *App) Run() error {
 
 	log := a.log.With(slog.String("op", op), slog.Int("port", a.port))
 
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "localhost", a.port))
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", a.address, a.port))
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}

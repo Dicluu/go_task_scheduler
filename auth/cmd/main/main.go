@@ -45,7 +45,7 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.Recoverer, middleware.Logger)
-	
+
 	r.Post("/register", reg.New(log, reg.NewUsecase(storage, log, p)))
 	r.Post("/login", login.New(log, login.NewUsecase(log, storage, storage, cfg.Secret, cfg.TokenTTL, cfg.RefreshTokenTTL)))
 	r.Post("/refresh", refresh.New(log, refresh.NewUsecase(log, storage, storage, cfg.TokenTTL, cfg.RefreshTokenTTL), cfg.Secret))

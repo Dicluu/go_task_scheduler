@@ -18,7 +18,7 @@ func main() {
 	log.Info("log initialized")
 
 	gctx, cancel := context.WithCancel(context.Background())
-	application := app.New(gctx, log, cfg.GRPCServer.Port, cfg.StoragePath, cfg.SmtpServer)
+	application := app.New(gctx, log, cfg.GRPCServer.Port, cfg.StoragePath, cfg.SmtpServer, cfg.GRPCServer.Address)
 
 	go application.GRPCServer.MustRun()
 

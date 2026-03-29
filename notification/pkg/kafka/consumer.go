@@ -2,17 +2,19 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"notification/internal/lib/logger/sl"
 	"strings"
+	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 const (
-	sessionTimeout = 7000
-	noTimeout      = -1
+	sessionTimeout   = 7000
+	reconnectBackoff = 5000
 )
 
 type Handler interface {
@@ -36,6 +38,9 @@ func NewConsumer(h Handler, l *slog.Logger, topic, cGroup string, addresses []st
 		"enable.auto.offset.store": false,
 		"enable.auto.commit":       true,
 		"auto.commit.interval.ms":  5000,
+		"reconnect.backoff.ms":     reconnectBackoff,
+		"reconnect.backoff.max.ms": 30000,
+		"auto.offset.reset":        "earliest",
 	}
 
 	c, err := kafka.NewConsumer(cfg)
@@ -63,8 +68,24 @@ func (c *Consumer) Start() {
 			break
 		}
 
-		msg, err := c.consumer.ReadMessage(noTimeout)
+		msg, err := c.consumer.ReadMessage(time.Second)
 		if err != nil {
+			var e kafka.Error
+			errors.As(err, &e)
+
+			if e.Code() == kafka.ErrAllBrokersDown {
+				log.Error("failed to read message from kafka, reconnect...")
+
+				// force sleep to prevent read request by timeout before reconnect backoff
+				time.Sleep(reconnectBackoff * time.Millisecond)
+
+				continue
+			}
+
+			if e.Code() == kafka.ErrTimedOut {
+				continue
+			}
+
 			log.Error("failed to read message", sl.Err(err))
 			continue
 		}
