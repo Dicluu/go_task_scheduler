@@ -34,19 +34,22 @@ func Register(gctx context.Context, gRPC *grpc.Server, notifier Notifier, log *s
 func (s *serverAPI) Notify(srv notifyv1.Notifier_NotifyServer) error {
 	const op = "internal.grpc.server.Notify"
 	log := s.log.With(slog.String("op", op))
-	ctx := srv.Context()
+	ctx, cancel := context.WithCancel(srv.Context())
 	done := make(chan struct{})
 	defer close(done)
+	defer cancel()
 
 	go func() {
 		for {
 			req, err := srv.Recv()
-			if err != nil {
-				log.Error("gRPC stream closed by interrupt")
-				return
-			}
 			if err == io.EOF {
 				log.Info("stream closed successfully by client")
+				cancel()
+				return
+			}
+			if err != nil {
+				log.Error("gRPC stream closed by interrupt")
+				cancel()
 				return
 			}
 
