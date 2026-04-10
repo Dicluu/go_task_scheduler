@@ -5,10 +5,9 @@ RUN go mod download
 RUN apk add --no-cache build-base
 COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -o /bin/main -tags musl cmd/main/main.go
+
 FROM scratch
-ENV CONFIG_PATH=./config/local.yaml
-COPY /config/ config/
 COPY /storage/ storage/
 COPY --from=builder /lib/ld-musl-x86_64.so.1 /lib/
 COPY --from=builder /bin/main /bin/main
-ENTRYPOINT ["/bin/main"]
+ENTRYPOINT ["/bin/main", "--config=/config/config.yaml"]

@@ -1,0 +1,89 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.NOTIFICATION_DOCKER_USER }}/notification:latest .
+
+      - name: Build Docker image consumer
+        run: docker build -t ${{ secrets.NOTIFICATION_DOCKER_USER }}/notification-consumer:latest -f Dockerfile.consumer .
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.NOTIFICATION_DOCKER_PASS }}" | docker login -u "${{ secrets.NOTIFICATION_DOCKER_USER }}" --password-stdin
+
+      - name: Push Docker image
+        run: docker push ${{ secrets.NOTIFICATION_DOCKER_USER }}/notification:latest
+
+      - name: Push Docker image consumer
+        run: docker push ${{ secrets.NOTIFICATION_DOCKER_USER }}/notification-consumer:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.NOTIFICATION_DOCKER_PASS }}" | docker login -u "${{ secrets.NOTIFICATION_DOCKER_USER }}" --password-stdin
+
+      - name: Inject config notification
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.NOTIFICATION_SERVER_HOST }}
+          username: ${{ secrets.NOTIFICATION_SERVER_USER }}
+          key: ${{ secrets.NOTIFICATION_SERVER_SSH_KEY }}
+          script: |
+            [ -d /var/www/notification ] && echo "" >> /dev/null || mkdir -p /var/www/notification 
+            echo "${{ secrets.NOTIFICATION_CONFIG }}" > /var/www/notification/config.yaml
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.NOTIFICATION_SERVER_HOST }}
+          username: ${{ secrets.NOTIFICATION_SERVER_USER }}
+          key: ${{ secrets.NOTIFICATION_SERVER_SSH_KEY }}
+          script: |
+            echo "${{ secrets.NOTIFICATION_DOCKER_PASS }}" | docker login -u "${{ secrets.NOTIFICATION_DOCKER_USER }}" --password-stdin
+            docker pull ${{ secrets.NOTIFICATION_DOCKER_USER }}/notification:latest
+            docker stop notification || true
+            docker rm notification || true
+            docker run -d \
+              --name notification \
+              -p 80:8080 \
+              -v /var/www/notification/config.yaml:/config/config.yaml \
+              ${{ secrets.NOTIFICATION_DOCKER_USER }}/notification:latest
+
+      - name: Deploy via SSH consumer
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.NOTIFICATION_SERVER_HOST }}
+          username: ${{ secrets.NOTIFICATION_SERVER_USER }}
+          key: ${{ secrets.NOTIFICATION_SERVER_SSH_KEY }}
+          script: |
+            echo "${{ secrets.NOTIFICATION_DOCKER_PASS }}" | docker login -u "${{ secrets.NOTIFICATION_DOCKER_USER }}" --password-stdin
+            docker pull ${{ secrets.NOTIFICATION_DOCKER_USER }}/notification-consumer:latest
+            docker stop notification-consumer || true
+            docker rm notification-consumer || true
+            docker run -d \
+              --name notification-consumer \
+              -p 80:8080 \
+              -v /var/www/notification/config.yaml:/config/config.yaml \
+              ${{ secrets.NOTIFICATION_DOCKER_USER }}/notification-consumer:latest

@@ -1,0 +1,89 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.TASK_DOCKER_USER }}/task:latest .
+
+      - name: Build Docker image cron
+        run: docker build -t ${{ secrets.TASK_DOCKER_USER }}/task-cron:latest -f Dockerfile.cron .
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.TASK_DOCKER_PASS }}" | docker login -u "${{ secrets.TASK_DOCKER_USER }}" --password-stdin
+
+      - name: Push Docker image
+        run: docker push ${{ secrets.TASK_DOCKER_USER }}/task:latest
+
+      - name: Push Docker image cron
+        run: docker push ${{ secrets.TASK_DOCKER_USER }}/task-cron:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.TASK_DOCKER_PASS }}" | docker login -u "${{ secrets.TASK_DOCKER_USER }}" --password-stdin
+
+      - name: Inject config task
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TASK_SERVER_HOST }}
+          username: ${{ secrets.TASK_SERVER_USER }}
+          key: ${{ secrets.TASK_SERVER_SSH_KEY }}
+          script: |
+            [ -d /var/www/task ] && echo "" >> /dev/null || mkdir -p /var/www/task 
+            echo "${{ secrets.TASK_CONFIG }}" > /var/www/task/config.yaml
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TASK_SERVER_HOST }}
+          username: ${{ secrets.TASK_SERVER_USER }}
+          key: ${{ secrets.TASK_SERVER_SSH_KEY }}
+          script: |
+            echo "${{ secrets.TASK_DOCKER_PASS }}" | docker login -u "${{ secrets.TASK_DOCKER_USER }}" --password-stdin
+            docker pull ${{ secrets.TASK_DOCKER_USER }}/task:latest
+            docker stop task || true
+            docker rm task || true
+            docker run -d \
+              --name task \
+              -p 80:8080 \
+              -v /var/www/task/config.yaml:/config/config.yaml \
+              ${{ secrets.TASK_DOCKER_USER }}/task:latest
+
+      - name: Deploy via SSH cron
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TASK_SERVER_HOST }}
+          username: ${{ secrets.TASK_SERVER_USER }}
+          key: ${{ secrets.TASK_SERVER_SSH_KEY }}
+          script: |
+            echo "${{ secrets.TASK_DOCKER_PASS }}" | docker login -u "${{ secrets.TASK_DOCKER_USER }}" --password-stdin
+            docker pull ${{ secrets.TASK_DOCKER_USER }}/task-cron:latest
+            docker stop task-cron || true
+            docker rm task-cron || true
+            docker run -d \
+              --name task-cron \
+              -p 80:8080 \
+              -v /var/www/task/config.yaml:/config/config.yaml \
+              ${{ secrets.TASK_DOCKER_USER }}/task-cron:latest

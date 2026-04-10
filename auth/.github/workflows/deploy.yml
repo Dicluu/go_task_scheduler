@@ -1,0 +1,66 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.AUTH_DOCKER_USER }}/auth:latest .
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.AUTH_DOCKER_PASS }}" | docker login -u "${{ secrets.AUTH_DOCKER_USER }}" --password-stdin
+
+      - name: Push Docker image
+        run: docker push ${{ secrets.AUTH_DOCKER_USER }}/auth:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.AUTH_DOCKER_PASS }}" | docker login -u "${{ secrets.AUTH_DOCKER_USER }}" --password-stdin
+
+      - name: Inject config
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AUTH_SERVER_HOST }}
+          username: ${{ secrets.AUTH_SERVER_USER }}
+          key: ${{ secrets.AUTH_SERVER_SSH_KEY }}
+          script: |
+            [ -d /var/www/auth ] && echo "" >> /dev/null || mkdir -p /var/www/auth 
+            echo "${{ secrets.AUTH_CONFIG }}" > /var/www/auth/config.yaml
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AUTH_SERVER_HOST }}
+          username: ${{ secrets.AUTH_SERVER_USER }}
+          key: ${{ secrets.AUTH_SERVER_SSH_KEY }}
+          script: |
+            echo "${{ secrets.AUTH_DOCKER_PASS }}" | docker login -u "${{ secrets.AUTH_DOCKER_USER }}" --password-stdin
+            docker pull ${{ secrets.AUTH_DOCKER_USER }}/auth:latest
+            docker stop auth || true
+            docker rm auth || true
+            docker run -d \
+              --name auth \
+              -p 80:8080 \
+              -v /var/www/auth/config.yaml:/config/config.yaml \
+              ${{ secrets.AUTH_DOCKER_USER }}/auth:latest

@@ -1,2 +1,3 @@
 config/local.yaml
+config/config.yaml
 storage/*.db
